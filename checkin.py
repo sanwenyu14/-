@@ -1,190 +1,65 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
-import requests
-import json
-import time
-from datetime import datetime
-import logging
+from playwright.sync_api import sync_playwright
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s: %(message)s'
-)
-logger = logging.getLogger(__name__)
+def run():
+    # 从环境变量中获取账号和密码（为了安全，稍后会在 GitHub Secrets 中配置）
+    USERNAME = os.environ.get("USERNAME")
+    PASSWORD = os.environ.get("PASSWORD")
 
-class AutoCheckIn:
-    def __init__(self):
-        # 从环境变量获取敏感信息（GitHub Secrets）
-        self.username = os.getenv('CHECKIN_USERNAME', '')
-        self.password = os.getenv('CHECKIN_PASSWORD', '')
-        self.cookie = os.getenv('CHECKIN_COOKIE', '')
-        self.token = os.getenv('CHECKIN_TOKEN', '')
-        
-        # 签到配置（需要根据实际网站修改）
-        self.config = {
-            'login_url': os.getenv('LOGIN_URL', 'https://example.com/login'),
-            'checkin_url': os.getenv('CHECKIN_URL', 'https://example.com/checkin'),
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-    def login(self):
-        """登录示例（根据实际网站修改）"""
-        if not self.config['login_url'] or self.config['login_url'] == 'https://example.com/login':
-            logger.info("跳过登录（使用预设cookie/token）")
-            return True
-            
+    if not USERNAME or not PASSWORD:
+        print("未找到账号或密码环境变量，请检查配置！")
+        return
+
+    with sync_playwright() as p:
+        # 启动无头浏览器 (headless=True 表示不显示浏览器界面)
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
         try:
-            payload = {
-                'username': self.username,
-                'password': self.password
-            }
+            print("正在访问登录页面...")
+            page.goto("https://992236.xyz/login")
+
+            # 1. 勾选用户协议同意 (请替换为实际的 CSS 选择器)
+            # 例如：page.locator("#agreement-checkbox").click()
+            print("勾选用户协议...")
+            page.locator("替换为协议复选框的选择器").click()
+
+            # 2. 选择登录方式 (请替换为实际的 CSS 选择器)
+            # 例如：page.locator("text=账号密码登录").click()
+            print("选择登录方式...")
+            page.locator("替换为你要选择的登录方式的选择器").click()
+
+            # 3. 输入账号和密码
+            print("填写账号密码...")
+            page.locator("替换为账号输入框的选择器").fill(USERNAME)
+            page.locator("替换为密码输入框的选择器").fill(PASSWORD)
+
+            # 4. 点击登录按钮
+            print("点击登录...")
+            page.locator("替换为登录按钮的选择器").click()
+
+            # 等待页面跳转完成（或者等待某个登录成功后的元素出现）
+            page.wait_for_load_state('networkidle')
+
+            # 5. 跳转到签到页面
+            print("正在跳转到个人中心页面...")
+            page.goto("https://992236.xyz/console/personal")
+            page.wait_for_load_state('networkidle')
+
+            # 6. 点击签到按钮
+            print("执行签到操作...")
+            # 例如：page.locator("text=立即签到").click()
+            page.locator("替换为签到按钮的选择器").click()
             
-            headers = {
-                'User-Agent': self.config['user_agent'],
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-            
-            response = requests.post(
-                self.config['login_url'],
-                data=payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                logger.info("登录成功")
-                # 提取并保存cookie/token
-                # self.cookie = response.cookies.get_dict()
-                return True
-            else:
-                logger.error(f"登录失败: {response.status_code}")
-                return False
-                
+            # 等待几秒钟确保签到请求发送成功
+            page.wait_for_timeout(3000)
+            print("签到脚本执行完毕！")
+
         except Exception as e:
-            logger.error(f"登录异常: {str(e)}")
-            return False
-    
-    def check_in(self):
-        """执行签到"""
-        try:
-            # 构建请求头
-            headers = {
-                'User-Agent': self.config['user_agent'],
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            }
-            
-            # 添加认证信息（根据实际情况选择一种）
-            if self.cookie:
-                headers['Cookie'] = self.cookie
-            if self.token:
-                headers['Authorization'] = f'Bearer {self.token}'
-            
-            # 请求参数（根据实际API修改）
-            payload = {
-                'action': 'checkin',
-                'timestamp': int(time.time())
-            }
-            
-            logger.info(f"开始签到: {self.config['checkin_url']}")
-            
-            # 发送签到请求
-            response = requests.post(
-                self.config['checkin_url'],
-                json=payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            result = {
-                'success': False,
-                'status_code': response.status_code,
-                'response': None,
-                'message': ''
-            }
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    result['response'] = data
-                    result['success'] = True
-                    result['message'] = data.get('msg', '签到成功')
-                    logger.info(f"签到成功: {result['message']}")
-                except:
-                    result['message'] = response.text[:200]
-                    logger.info(f"签到返回: {result['message']}")
-            else:
-                result['message'] = f"HTTP {response.status_code}: {response.text[:200]}"
-                logger.error(f"签到失败: {result['message']}")
-            
-            return result
-            
-        except requests.exceptions.RequestException as e:
-            error_msg = f"请求异常: {str(e)}"
-            logger.error(error_msg)
-            return {
-                'success': False,
-                'message': error_msg
-            }
-        except Exception as e:
-            error_msg = f"未知错误: {str(e)}"
-            logger.error(error_msg)
-            return {
-                'success': False,
-                'message': error_msg
-            }
-    
-    def send_notification(self, result):
-        """发送结果通知（可选）"""
-        # 这里可以集成邮件、Server酱、Telegram、钉钉等通知
-        webhook_url = os.getenv('NOTIFICATION_WEBHOOK')
-        if not webhook_url:
-            return
-        
-        try:
-            notification = {
-                'title': '自动签到结果',
-                'content': f"""
-时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-状态: {'✅ 成功' if result['success'] else '❌ 失败'}
-详情: {result.get('message', '无详细信息')}
-                """.strip()
-            }
-            
-            requests.post(webhook_url, json=notification, timeout=10)
-            logger.info("通知发送成功")
-        except:
-            logger.warning("通知发送失败")
+            print(f"执行过程中出现错误: {e}")
+        finally:
+            browser.close()
 
-def main():
-    """主函数"""
-    logger.info("=" * 50)
-    logger.info("开始执行自动签到任务")
-    logger.info(f"执行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    checker = AutoCheckIn()
-    
-    # 如果需要登录，先登录
-    if checker.username and checker.password:
-        if not checker.login():
-            logger.error("登录失败，退出")
-            return
-    
-    # 执行签到
-    result = checker.check_in()
-    
-    # 发送通知
-    checker.send_notification(result)
-    
-    logger.info("自动签到任务完成")
-    logger.info("=" * 50)
-    
-    # 如果失败，抛出异常让GitHub Actions标记为失败
-    if not result['success']:
-        raise Exception(f"签到失败: {result.get('message', '未知错误')}")
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    run()
