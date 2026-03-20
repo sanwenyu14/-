@@ -1,0 +1,63 @@
+name: Auto Checkin
+
+on:
+  # 定时触发（UTC时间）
+  schedule:
+    # 每天北京时间 8:00 运行（UTC 0:00）
+    - cron: '0 0 * * *'
+  
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '手动运行原因'
+        required: false
+        default: '手动执行签到'
+  
+  # 推送到main分支时也运行（测试用）
+  push:
+    branches: [ main ]
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 1
+    
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install requests
+    
+    - name: 执行签到
+      env:
+        # 从 GitHub Secrets 读取配置
+        CHECKIN_USERNAME: ${{ secrets.CHECKIN_USERNAME }}
+        CHECKIN_PASSWORD: ${{ secrets.CHECKIN_PASSWORD }}
+        CHECKIN_COOKIE: ${{ secrets.CHECKIN_COOKIE }}
+        CHECKIN_TOKEN: ${{ secrets.CHECKIN_TOKEN }}
+        LOGIN_URL: ${{ secrets.LOGIN_URL }}
+        CHECKIN_URL: ${{ secrets.CHECKIN_URL }}
+        NOTIFICATION_WEBHOOK: ${{ secrets.NOTIFICATION_WEBHOOK }}
+      run: |
+        python scripts/checkin.py
+    
+    - name: 上传日志
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: checkin-logs
+        path: |
+          *.log
+        retention-days: 7
